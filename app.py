@@ -9,21 +9,24 @@ import requests
 # 🔑 Chave de API (Google API Key + integração futura Auth0)
 API_KEY = "AIzaSyDJNAf_HhkW5vJ_tsHvjMi9sQ6Woxvfmis"
 
-# 🌐 Fonte de dados (planilha pública Google Sheets - formato CSV)
-CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0r3XE4DpzlYJjZwjc2c_pW_K3euooN9caPedtSq-nH_aEPnvx1jrcd9t0Yhg8fqXfR3j5jM2OyUQQ/pub?output=csv"
+# 🌐 Fonte de dados (planilha pública Google Sheets - exportada como XLSX online, simulando múltiplas abas)
+PLANILHA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0r3XE4DpzlYJjZwjc2c_pW_K3euooN9caPedtSq-nH_aEPnvx1jrcd9t0Yhg8fqXfR3j5jM2OyUQQ/pub?output=xlsx"
 
 # ============================
 # FUNÇÕES DE SUPORTE E CARGA
 # ============================
 @st.cache_data
-def carregar_planilha_online():
+def carregar_abas_planilha():
     try:
-        df = pd.read_csv(CSV_URL)
-        df.columns = df.columns.str.upper().str.strip()
-        return df
+        dados = pd.read_excel(PLANILHA_URL, sheet_name=None)
+        tabelas = {}
+        for nome, df in dados.items():
+            df.columns = df.columns.str.upper().str.strip()
+            tabelas[nome.upper()] = df
+        return tabelas
     except Exception as e:
-        st.error(f"Erro ao acessar planilha online: {e}")
-        return pd.DataFrame()
+        st.error(f"Erro ao acessar planilha online com múltiplas abas: {e}")
+        return {}
 
 # ===================
 # TELA DE LOGIN COM VALIDAÇÃO FIXA
@@ -48,13 +51,15 @@ def login_page():
 # =============
 def vendas_page():
     st.title("🛒 PDV Oliveira - Registro de Vendas")
-    df = carregar_planilha_online()
+    tabelas = carregar_abas_planilha()
+    df = tabelas.get("PRODUTO", pd.DataFrame())
+
     if df.empty:
-        st.warning("Planilha não carregada.")
+        st.error("A aba 'PRODUTO' não foi encontrada ou está vazia.")
         return
 
     if 'DESCRICAO' not in df.columns or 'PRECO' not in df.columns:
-        st.error("Planilha inválida: coluna 'DESCRICAO' ou 'PRECO' ausente.")
+        st.error("Planilha inválida: coluna 'DESCRICAO' ou 'PRECO' ausente na aba PRODUTO.")
         return
 
     st.subheader("📦 Produtos disponíveis")
@@ -75,17 +80,17 @@ def vendas_page():
 # ==================
 def relatorios_page():
     st.title("📊 Relatórios de Vendas - PDV Oliveira")
-    df = carregar_planilha_online()
-    if df.empty:
-        st.warning("Sem dados para exibir.")
+    tabelas = carregar_abas_planilha()
+    df = tabelas.get("VENDA", pd.DataFrame())
+
+    if df.empty or 'TOTAL' not in df.columns:
+        st.info("Coluna 'TOTAL' não encontrada na aba VENDA.")
         return
 
-    if 'TOTAL' not in df.columns or 'DESCRICAO' not in df.columns:
-        st.info("Colunas necessárias para relatório não encontradas.")
-    else:
-        st.subheader("📈 Estatísticas")
-        st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
-        st.bar_chart(df.groupby("DESCRICAO")["TOTAL"].sum())
+    st.subheader("📈 Estatísticas")
+    st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
+    if 'ID_CLIENTE' in df.columns:
+        st.bar_chart(df.groupby("ID_CLIENTE")["TOTAL"].sum())
 
 # ===================
 # INTERFACE PRINCIPAL
