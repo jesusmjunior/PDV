@@ -1,11 +1,3 @@
-# -*- coding: utf-8 -*-
-# ORION PDV STREAMLIT - APP UNIFICADO
-# Módulos: Cadastro Produto, Cliente, Venda, Relatórios, Painel
-
-# ===================== DEPENDÊNCIAS NECESSÁRIAS =====================
-# Certifique-se de ter os seguintes pacotes instalados:
-# pip install streamlit pandas plotly streamlit-authenticator
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
