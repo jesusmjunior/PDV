@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# ORION PDV STREAMLIT - APP UNIFICADO
-# Módulos: Cadastro Produto, Cliente, Venda, Relatórios, Painel
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
