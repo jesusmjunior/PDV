@@ -2,24 +2,17 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
-import gspread
-from google.oauth2.service_account import Credentials
 import streamlit_authenticator as stauth
 
 # =============================
-# CONFIGURAÇÃO GOOGLE SHEETS
+# LEITURA DIRETA DO GOOGLE SHEETS VIA CSV PÚBLICO (ALTERNATIVA AO GSPREAD)
 # =============================
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-CREDENTIALS_FILE = 'client_secret.json'  # Suba esse arquivo junto ao app.py no GitHub
-SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1KsMt9JFkTZfRSj0POfHNg07NFb56aA-GJyb3KnkHQbc/edit?usp=sharing'
-
-# Autenticando com Google
-creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
-client = gspread.authorize(creds)
-spreadsheet = client.open_by_url(SPREADSHEET_URL)
-sheet_produto = spreadsheet.worksheet("PRODUTO")
-data_produto = sheet_produto.get_all_records()
-produtos_df = pd.DataFrame(data_produto)
+SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSmWJv9XmwN1aGm0CjKafOeSpV4u_GJ8oUOtJYbHVnOwUblZuWV9oCD5CH7qjTo61oos4sdZaKEnCMb/pub?gid=1282414047&single=true&output=csv'
+try:
+    produtos_df = pd.read_csv(SHEET_URL)
+except Exception as e:
+    st.warning(f"Erro ao carregar planilha pública: {e}")
+    produtos_df = pd.DataFrame()
 
 # =============================
 # BANCO LOCAL (SQLITE)
