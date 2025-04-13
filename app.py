@@ -1,9 +1,13 @@
+# -*- coding: utf-8 -*-
+# ORION PDV STREAMLIT - APP UNIFICADO COM AUTENTICAÇÃO NATIVA
+# Corrigido para evitar uso de st.experimental_rerun()
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import hashlib
 
-# ============ Função de Autenticação Simples ============
+# ============ Função de Autenticação ============
 USUARIOS = {
     "admjesus": {
         "nome": "ADM Jesus",
@@ -29,7 +33,6 @@ if not st.session_state["autenticado"]:
             st.session_state["autenticado"] = True
             st.session_state["usuario"] = usuario
             st.success("Login realizado com sucesso!")
-            st.experimental_rerun()
         else:
             st.error("Usuário ou senha incorretos.")
     st.stop()
@@ -60,7 +63,6 @@ except Exception as e:
 st.sidebar.title("🔹 Menu PDV")
 if st.sidebar.button("Sair"):
     st.session_state["autenticado"] = False
-    st.experimental_rerun()
 
 menu = st.sidebar.radio("Escolha a opção:", ["Cadastro Produto", "Cadastro Cliente", "Registrar Venda", "Relatórios", "Painel"])
 
