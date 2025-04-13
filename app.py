@@ -1,57 +1,57 @@
 import streamlit as st
 import pandas as pd
-import requests
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from urllib.parse import urlencode
+import streamlit_auth0 as stauth
 
 # ========================
-# PDV OLIVEIRA - APP ONLINE
+# PDV OLIVEIRA - APP ONLINE COM AUTH0 + GOOGLE DRIVE
 # ========================
 
-# 🔑 Chave de API (Google API Key + integração futura Auth0)
-API_KEY = "AIzaSyDJNAf_HhkW5vJ_tsHvjMi9sQ6Woxvfmis"
+# 🔐 AUTH0 CONFIG
+AUTH0_CLIENT_ID = "145009781337-065tk1gp2jbo5rl7m18klch1s4m5t1ir.apps.googleusercontent.com"
+AUTH0_DOMAIN = "zeta-bonbon-424022-b5.us.auth0.com"  # Domínio Auth0 atualizado
+AUTH0_CLIENT_SECRET = "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"
 
-# 🌐 Fonte de dados (planilha pública Google Sheets - exportada como XLSX online, simulando múltiplas abas)
-PLANILHA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0r3XE4DpzlYJjZwjc2c_pW_K3euooN9caPedtSq-nH_aEPnvx1jrcd9t0Yhg8fqXfR3j5jM2OyUQQ/pub?output=xlsx"
+# 📁 Nome do arquivo de credencial e nome da planilha no Google Drive
+CRED_PATH = "client_secret_145009781337-065tk1gp2jbo5rl7m18klch1s4m5t1ir.apps.googleusercontent.com (1).json"
+NOME_PLANILHA = "SIS_PDV_PLANILHA"
 
 # ============================
-# FUNÇÕES DE SUPORTE E CARGA
+# FUNÇÃO: CONECTAR AO GOOGLE SHEETS
 # ============================
-@st.cache_data
-def carregar_abas_planilha():
-    try:
-        dados = pd.read_excel(PLANILHA_URL, sheet_name=None)
-        tabelas = {}
-        for nome, df in dados.items():
-            df.columns = df.columns.str.upper().str.strip()
-            tabelas[nome.upper()] = df
-        return tabelas
-    except Exception as e:
-        st.error(f"Erro ao acessar planilha online com múltiplas abas: {e}")
-        return {}
+def carregar_abas_drive():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(CRED_PATH, scope)
+    client = gspread.authorize(creds)
+    planilha = client.open(NOME_PLANILHA)
+
+    abas = {aba.title.upper(): pd.DataFrame(aba.get_all_records()) for aba in planilha.worksheets()}
+    for nome, df in abas.items():
+        abas[nome].columns = [col.upper().strip() for col in df.columns]
+    return abas
 
 # ===================
-# TELA DE LOGIN COM VALIDAÇÃO FIXA
+# AUTENTICAÇÃO COM AUTH0
 # ===================
-def login_page():
-    st.title("🔐 Acesso ao PDV Oliveira")
-    st.markdown("Login baseado em sessão. Integração futura com Auth0 e OAuth2.")
-
-    login_input = st.text_input("Usuário")
-    senha_input = st.text_input("Senha", type="password")
-
-    if st.button("Entrar"):
-        if login_input == "Oliveira" and senha_input == "PDV":
-            st.session_state["logado"] = True
-            st.session_state["usuario"] = login_input
-            st.success("Login realizado com sucesso!")
-        else:
-            st.error("Usuário ou senha incorretos.")
+def autenticar_usuario():
+    auth0 = stauth.Auth0(
+        client_id=AUTH0_CLIENT_ID,
+        domain=AUTH0_DOMAIN,
+        client_secret=AUTH0_CLIENT_SECRET,
+        redirect_uri="http://localhost:8501",
+        scope="openid profile email"
+    )
+    user_info = auth0.login_button("Entrar com Auth0")
+    return user_info
 
 # =============
 # TELA DE VENDAS
 # =============
 def vendas_page():
     st.title("🛒 PDV Oliveira - Registro de Vendas")
-    tabelas = carregar_abas_planilha()
+    tabelas = carregar_abas_drive()
     df = tabelas.get("PRODUTO", pd.DataFrame())
 
     if df.empty:
@@ -80,7 +80,7 @@ def vendas_page():
 # ==================
 def relatorios_page():
     st.title("📊 Relatórios de Vendas - PDV Oliveira")
-    tabelas = carregar_abas_planilha()
+    tabelas = carregar_abas_drive()
     df = tabelas.get("VENDA", pd.DataFrame())
 
     if df.empty or 'TOTAL' not in df.columns:
@@ -92,27 +92,43 @@ def relatorios_page():
     if 'ID_CLIENTE' in df.columns:
         st.bar_chart(df.groupby("ID_CLIENTE")["TOTAL"].sum())
 
+# ==================
+# TELA DE CLIENTES
+# ==================
+def clientes_page():
+    st.title("👥 Clientes Cadastrados")
+    tabelas = carregar_abas_drive()
+    df = tabelas.get("CLIENTE", pd.DataFrame())
+
+    if df.empty:
+        st.warning("A aba CLIENTE não foi encontrada.")
+        return
+
+    st.dataframe(df)
+    st.text_input("🔍 Buscar cliente por nome")
+    st.button("➕ Adicionar novo cliente (futuro)")
+
 # ===================
 # INTERFACE PRINCIPAL
 # ===================
 st.set_page_config(page_title="PDV Oliveira", layout="centered")
 st.sidebar.title("📌 Navegação")
-pagina = st.sidebar.radio("Escolha a tela", ["Login", "Vendas", "Relatórios"])
+pagina = st.sidebar.radio("Escolha a tela", ["Vendas", "Relatórios", "Clientes"])
 
-# Controle de sessão
-if "logado" not in st.session_state:
-    st.session_state["logado"] = False
-
-# Controle de páginas
-if pagina == "Login":
-    login_page()
-elif pagina == "Vendas":
-    if st.session_state["logado"]:
-        vendas_page()
+# ========================
+# AUTENTICAÇÃO E SESSÃO
+# ========================
+if "usuario" not in st.session_state:
+    user = autenticar_usuario()
+    if user:
+        st.session_state["usuario"] = user["email"]
     else:
-        st.warning("Por favor, acesse a tela de login primeiro.")
+        st.stop()
+
+# Controle de páginas com Auth0 ativo
+if pagina == "Vendas":
+    vendas_page()
 elif pagina == "Relatórios":
-    if st.session_state["logado"]:
-        relatorios_page()
-    else:
-        st.warning("Por favor, acesse a tela de login primeiro.")
+    relatorios_page()
+elif pagina == "Clientes":
+    clientes_page()
