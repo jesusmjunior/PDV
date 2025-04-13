@@ -19,24 +19,29 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0r3XE4DpzlYJjZwjc2c
 def carregar_dados():
     try:
         df = pd.read_csv(CSV_URL)
+        df.columns = df.columns.str.upper().str.strip()  # Normaliza nomes de colunas
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
         return pd.DataFrame()
 
 # ===================
-# TELA DE LOGIN FAKE
+# TELA DE LOGIN COM VALIDAÇÃO FIXA
 # ===================
 def login_page():
     st.title("🔐 Acesso ao PDV Oliveira")
-    st.markdown("""
-        ⚠️ Autenticação desativada para modo de demonstração.
-        
-        Sistema em desenvolvimento para integrar com **Auth0** e segurança baseada em token OAuth2.
-    """)
-    if st.button("Entrar no sistema (demo)"):
-        st.session_state["logado"] = True
-        st.session_state["usuario"] = "Administrador"
+    st.markdown("Entre com suas credenciais para continuar.")
+
+    login_input = st.text_input("Usuário")
+    senha_input = st.text_input("Senha", type="password")
+
+    if st.button("Entrar"):
+        if login_input == "Oliveira" and senha_input == "PDV":
+            st.session_state["logado"] = True
+            st.session_state["usuario"] = login_input
+            st.success("Login realizado com sucesso!")
+        else:
+            st.error("Usuário ou senha incorretos.")
 
 # ================
 # TELA DE VENDAS
@@ -46,6 +51,8 @@ def vendas_page():
     df = carregar_dados()
     if df.empty:
         st.warning("Nenhum dado carregado da planilha.")
+    elif 'DESCRICAO' not in df.columns or 'PRECO' not in df.columns:
+        st.error("Planilha inválida: colunas 'DESCRICAO' ou 'PRECO' ausentes.")
     else:
         st.subheader("📦 Produtos disponíveis")
         st.dataframe(df)
@@ -68,13 +75,12 @@ def relatorios_page():
     df = carregar_dados()
     if df.empty:
         st.warning("Sem dados para exibir.")
+    elif 'TOTAL' not in df.columns or 'DESCRICAO' not in df.columns:
+        st.info("Colunas necessárias para relatório não encontradas.")
     else:
         st.subheader("📈 Estatísticas")
-        if 'TOTAL' in df.columns:
-            st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
-            st.bar_chart(df.groupby("DESCRICAO")["TOTAL"].sum())
-        else:
-            st.info("Coluna 'TOTAL' não encontrada para relatório.")
+        st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
+        st.bar_chart(df.groupby("DESCRICAO")["TOTAL"].sum())
 
 # ===================
 # INTERFACE PRINCIPAL
