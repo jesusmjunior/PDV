@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# ORION PDV STREAMLIT - APP UNIFICADO COM AUTENTICAÇÃO NATIVA
-# Módulos: Cadastro Produto, Cliente, Venda, Relatórios, Painel
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
