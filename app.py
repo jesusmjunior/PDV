@@ -2,24 +2,37 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from urllib.parse import urlencode
 import streamlit_auth0 as stauth
 
 # ========================
-# PDV OLIVEIRA - APP ONLINE COM AUTH0 + GOOGLE DRIVE
+# CONFIGURAÇÃO AUTH0
 # ========================
-
-# 🔐 AUTH0 CONFIG
 AUTH0_CLIENT_ID = "145009781337-065tk1gp2jbo5rl7m18klch1s4m5t1ir.apps.googleusercontent.com"
-AUTH0_DOMAIN = "zeta-bonbon-424022-b5.us.auth0.com"  # Domínio Auth0 atualizado
+AUTH0_DOMAIN = "zeta-bonbon-424022-b5.us.auth0.com"
 AUTH0_CLIENT_SECRET = "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"
 
-# 📁 Nome do arquivo de credencial e nome da planilha no Google Drive
+# ========================
+# GOOGLE DRIVE CONFIG
+# ========================
 CRED_PATH = "client_secret_145009781337-065tk1gp2jbo5rl7m18klch1s4m5t1ir.apps.googleusercontent.com (1).json"
 NOME_PLANILHA = "SIS_PDV_PLANILHA"
 
 # ============================
-# FUNÇÃO: CONECTAR AO GOOGLE SHEETS
+# FUNÇÃO: AUTENTICAR USUÁRIO VIA AUTH0
+# ============================
+def autenticar_usuario():
+    auth0 = stauth.Auth0(
+        client_id=AUTH0_CLIENT_ID,
+        domain=AUTH0_DOMAIN,
+        client_secret=AUTH0_CLIENT_SECRET,
+        redirect_uri="http://localhost:8501",
+        scope="openid profile email"
+    )
+    user_info = auth0.login_button("🔐 Entrar com Auth0")
+    return user_info
+
+# ============================
+# FUNÇÃO: LER DADOS DO GOOGLE SHEETS
 # ============================
 def carregar_abas_drive():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -32,23 +45,9 @@ def carregar_abas_drive():
         abas[nome].columns = [col.upper().strip() for col in df.columns]
     return abas
 
-# ===================
-# AUTENTICAÇÃO COM AUTH0
-# ===================
-def autenticar_usuario():
-    auth0 = stauth.Auth0(
-        client_id=AUTH0_CLIENT_ID,
-        domain=AUTH0_DOMAIN,
-        client_secret=AUTH0_CLIENT_SECRET,
-        redirect_uri="http://localhost:8501",
-        scope="openid profile email"
-    )
-    user_info = auth0.login_button("Entrar com Auth0")
-    return user_info
-
-# =============
+# ============================
 # TELA DE VENDAS
-# =============
+# ============================
 def vendas_page():
     st.title("🛒 PDV Oliveira - Registro de Vendas")
     tabelas = carregar_abas_drive()
@@ -59,7 +58,7 @@ def vendas_page():
         return
 
     if 'DESCRICAO' not in df.columns or 'PRECO' not in df.columns:
-        st.error("Planilha inválida: coluna 'DESCRICAO' ou 'PRECO' ausente na aba PRODUTO.")
+        st.error("Coluna 'DESCRICAO' ou 'PRECO' ausente em PRODUTO.")
         return
 
     st.subheader("📦 Produtos disponíveis")
@@ -75,26 +74,25 @@ def vendas_page():
     if st.button("Registrar Venda"):
         st.success("Venda registrada (simulada).")
 
-# ==================
+# ============================
 # TELA DE RELATÓRIOS
-# ==================
+# ============================
 def relatorios_page():
-    st.title("📊 Relatórios de Vendas - PDV Oliveira")
+    st.title("📊 Relatórios de Vendas")
     tabelas = carregar_abas_drive()
     df = tabelas.get("VENDA", pd.DataFrame())
 
     if df.empty or 'TOTAL' not in df.columns:
-        st.info("Coluna 'TOTAL' não encontrada na aba VENDA.")
+        st.warning("Coluna 'TOTAL' não encontrada em VENDA.")
         return
 
-    st.subheader("📈 Estatísticas")
     st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
     if 'ID_CLIENTE' in df.columns:
         st.bar_chart(df.groupby("ID_CLIENTE")["TOTAL"].sum())
 
-# ==================
+# ============================
 # TELA DE CLIENTES
-# ==================
+# ============================
 def clientes_page():
     st.title("👥 Clientes Cadastrados")
     tabelas = carregar_abas_drive()
@@ -106,18 +104,18 @@ def clientes_page():
 
     st.dataframe(df)
     st.text_input("🔍 Buscar cliente por nome")
-    st.button("➕ Adicionar novo cliente (futuro)")
+    st.button("➕ Adicionar novo cliente (em breve)")
 
-# ===================
+# ============================
 # INTERFACE PRINCIPAL
-# ===================
+# ============================
 st.set_page_config(page_title="PDV Oliveira", layout="centered")
 st.sidebar.title("📌 Navegação")
 pagina = st.sidebar.radio("Escolha a tela", ["Vendas", "Relatórios", "Clientes"])
 
-# ========================
-# AUTENTICAÇÃO E SESSÃO
-# ========================
+# ============================
+# AUTENTICAÇÃO E CONTROLE DE ACESSO
+# ============================
 if "usuario" not in st.session_state:
     user = autenticar_usuario()
     if user:
@@ -125,7 +123,9 @@ if "usuario" not in st.session_state:
     else:
         st.stop()
 
-# Controle de páginas com Auth0 ativo
+# ============================
+# ROTEAMENTO DE PÁGINAS
+# ============================
 if pagina == "Vendas":
     vendas_page()
 elif pagina == "Relatórios":
