@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# ORION PDV STREAMLIT - APP UNIFICADO COM AUTENTICAÇÃO NATIVA
-# Corrigido para evitar uso de st.experimental_rerun()
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
