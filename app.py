@@ -3,36 +3,34 @@ import pandas as pd
 import requests
 
 # ========================
-# PDV OLIVEIRA - APP BASE
+# PDV OLIVEIRA - APP ONLINE
 # ========================
 
-# 🔑 Chave de API (para integração futura com Auth0 / Sheets / Drive)
+# 🔑 Chave de API (Google API Key + integração futura Auth0)
 API_KEY = "AIzaSyDJNAf_HhkW5vJ_tsHvjMi9sQ6Woxvfmis"
 
-# 📄 Planilha .xlsx com múltiplas tabelas relacionais (já enviada)
-EXCEL_PATH = "/mnt/data/SIS_PDV_PLANILHA (1).xlsx"
+# 🌐 Fonte de dados (planilha pública Google Sheets - formato CSV)
+CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0r3XE4DpzlYJjZwjc2c_pW_K3euooN9caPedtSq-nH_aEPnvx1jrcd9t0Yhg8fqXfR3j5jM2OyUQQ/pub?output=csv"
 
 # ============================
 # FUNÇÕES DE SUPORTE E CARGA
 # ============================
 @st.cache_data
-def carregar_planilhas():
+def carregar_planilha_online():
     try:
-        dados = pd.read_excel(EXCEL_PATH, sheet_name=None)
-        for nome, df in dados.items():
-            dados[nome] = df.copy()
-            dados[nome].columns = df.columns.str.upper().str.strip()
-        return dados
+        df = pd.read_csv(CSV_URL)
+        df.columns = df.columns.str.upper().str.strip()
+        return df
     except Exception as e:
-        st.error(f"Erro ao carregar planilha: {e}")
-        return {}
+        st.error(f"Erro ao acessar planilha online: {e}")
+        return pd.DataFrame()
 
 # ===================
 # TELA DE LOGIN COM VALIDAÇÃO FIXA
 # ===================
 def login_page():
     st.title("🔐 Acesso ao PDV Oliveira")
-    st.markdown("Entre com suas credenciais para continuar.")
+    st.markdown("Login baseado em sessão. Integração futura com Auth0 e OAuth2.")
 
     login_input = st.text_input("Usuário")
     senha_input = st.text_input("Senha", type="password")
@@ -50,23 +48,22 @@ def login_page():
 # =============
 def vendas_page():
     st.title("🛒 PDV Oliveira - Registro de Vendas")
-    data = carregar_planilhas()
-    if not data:
+    df = carregar_planilha_online()
+    if df.empty:
         st.warning("Planilha não carregada.")
         return
 
-    df_prod = data.get("PRODUTO", pd.DataFrame())
-    if df_prod.empty or 'DESCRICAO' not in df_prod.columns or 'PRECO' not in df_prod.columns:
-        st.error("Planilha inválida: coluna 'DESCRICAO' ou 'PRECO' ausente em PRODUTO.")
+    if 'DESCRICAO' not in df.columns or 'PRECO' not in df.columns:
+        st.error("Planilha inválida: coluna 'DESCRICAO' ou 'PRECO' ausente.")
         return
 
     st.subheader("📦 Produtos disponíveis")
-    st.dataframe(df_prod)
+    st.dataframe(df)
 
     st.subheader("🧾 Nova Venda")
-    produto = st.selectbox("Produto", df_prod['DESCRICAO'].unique())
+    produto = st.selectbox("Produto", df['DESCRICAO'].unique())
     qtd = st.number_input("Quantidade", min_value=1, value=1)
-    preco = df_prod[df_prod['DESCRICAO'] == produto]['PRECO'].values[0]
+    preco = df[df['DESCRICAO'] == produto]['PRECO'].values[0]
     total = qtd * preco
     st.write(f"💰 Total: R$ {total:.2f}")
 
@@ -78,21 +75,17 @@ def vendas_page():
 # ==================
 def relatorios_page():
     st.title("📊 Relatórios de Vendas - PDV Oliveira")
-    data = carregar_planilhas()
-    if not data:
+    df = carregar_planilha_online()
+    if df.empty:
         st.warning("Sem dados para exibir.")
         return
 
-    df_vendas = data.get("VENDA", pd.DataFrame())
-    df_prod = data.get("PRODUTO", pd.DataFrame())
-
-    if df_vendas.empty or 'TOTAL' not in df_vendas.columns:
-        st.info("Coluna 'TOTAL' não encontrada na planilha VENDA.")
+    if 'TOTAL' not in df.columns or 'DESCRICAO' not in df.columns:
+        st.info("Colunas necessárias para relatório não encontradas.")
     else:
         st.subheader("📈 Estatísticas")
-        st.metric("Total de Vendas", f"R$ {df_vendas['TOTAL'].sum():.2f}")
-        if 'ID_PRODUTO' in df_prod.columns and 'DESCRICAO' in df_prod.columns:
-            st.bar_chart(df_prod.set_index("DESCRICAO")["PRECO"])
+        st.metric("Total de Vendas", f"R$ {df['TOTAL'].sum():.2f}")
+        st.bar_chart(df.groupby("DESCRICAO")["TOTAL"].sum())
 
 # ===================
 # INTERFACE PRINCIPAL
