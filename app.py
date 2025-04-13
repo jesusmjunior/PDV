@@ -1,157 +1,120 @@
+# -*- coding: utf-8 -*-
+# ORION PDV STREAMLIT - APP UNIFICADO
+# Módulos: Cadastro Produto, Cliente, Venda, Relatórios, Painel
+
 import streamlit as st
 import pandas as pd
-import sqlite3
+import plotly.express as px
 from datetime import datetime
 import streamlit_authenticator as stauth
 
-# =============================
-# LEITURA DIRETA DO GOOGLE SHEETS VIA CSV PÚBLICO (ALTERNATIVA AO GSPREAD)
-# =============================
-SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSmWJv9XmwN1aGm0CjKafOeSpV4u_GJ8oUOtJYbHVnOwUblZuWV9oCD5CH7qjTo61oos4sdZaKEnCMb/pub?gid=1282414047&single=true&output=csv'
+# URLs CSV Google Sheets
+urls = {
+    "cliente": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "produto": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "grupo": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "marcas": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "forma_pgto": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "venda": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv",
+    "itens_saida": "https://docs.google.com/spreadsheets/d/e/2PACX-1v...&output=csv"
+}
+
+# Carregar DataFrames
 try:
-    produtos_df = pd.read_csv(SHEET_URL)
+    cliente_df = pd.read_csv(urls["cliente"])
+    produto_df = pd.read_csv(urls["produto"])
+    grupo_df = pd.read_csv(urls["grupo"])
+    marcas_df = pd.read_csv(urls["marcas"])
+    forma_pgto_df = pd.read_csv(urls["forma_pgto"])
+    venda_df = pd.read_csv(urls["venda"])
+    venda_df["DATA"] = pd.to_datetime(venda_df["DATA"], errors="coerce")
 except Exception as e:
-    st.warning(f"Erro ao carregar planilha pública: {e}")
-    produtos_df = pd.DataFrame()
+    st.error(f"Erro ao carregar planilhas: {e}")
 
-# =============================
-# BANCO LOCAL (SQLITE)
-# =============================
-conn = sqlite3.connect('pdv.db')
-cursor = conn.cursor()
-
-# Inicializar tabelas
-cursor.execute('''CREATE TABLE IF NOT EXISTS USUARIO (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    senha TEXT NOT NULL)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS CLIENTE (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    telefone TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS PRODUTO (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    grupo TEXT,
-    marca TEXT,
-    preco REAL NOT NULL,
-    estoque INTEGER)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS VENDA (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cliente_id INTEGER,
-    usuario_id INTEGER,
-    data TEXT,
-    forma_pgto TEXT,
-    total REAL,
-    FOREIGN KEY (cliente_id) REFERENCES CLIENTE(id),
-    FOREIGN KEY (usuario_id) REFERENCES USUARIO(id))''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS ITENS_SAIDA (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    venda_id INTEGER,
-    produto_id INTEGER,
-    quantidade INTEGER,
-    preco_unitario REAL,
-    FOREIGN KEY (venda_id) REFERENCES VENDA(id),
-    FOREIGN KEY (produto_id) REFERENCES PRODUTO(id))''')
-conn.commit()
-
-# =============================
-# AUTENTICAÇÃO
-# =============================
+# Autenticação (inline)
 config = {
     'credentials': {
         'usernames': {
             'admjesus': {
                 'name': 'ADM Jesus',
                 'password': stauth.Hasher(['senha123']).generate()[0]
-            },
-            'vendedor1': {
-                'name': 'Vendedor 1',
-                'password': stauth.Hasher(['venda2025']).generate()[0]
-            },
+            }
         }
     },
-    'cookie': {
-        'name': 'pdv_login_cookie',
-        'key': 'assinatura_segura',
-        'expiry_days': 1
-    },
-    'preauthorized': {
-        'emails': ["admin@email.com"]
-    }
+    'cookie': {'name': 'auth_cookie', 'key': 'orionkey', 'expiry_days': 1},
+    'preauthorized': {'emails': []}
 }
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
-)
+authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
+name, auth_status, _ = authenticator.login("Login", "main")
 
-name, auth_status, username = authenticator.login("Login", "main")
-
+# Interface principal
 if auth_status:
-    st.success(f"Bem-vindo, {name}!")
     authenticator.logout("Sair", "sidebar")
+    st.sidebar.title("🔹 Menu PDV")
+    menu = st.sidebar.radio("Escolha a opção:", ["Cadastro Produto", "Cadastro Cliente", "Registrar Venda", "Relatórios", "Painel"])
 
-    aba = st.sidebar.radio("📌 Menu", ["Cadastrar Produto", "Nova Venda", "Relatório"])
+    if menu == "Cadastro Produto":
+        st.title("📦 Cadastro de Produto")
+        with st.form("cad_prod"):
+            nome = st.text_input("Nome do Produto")
+            grupo = st.selectbox("Grupo", grupo_df["DESCRICAO"].dropna())
+            marca = st.selectbox("Marca", marcas_df["DESCRICAO"].dropna())
+            preco = st.number_input("Preço", min_value=0.0)
+            estoque = st.number_input("Estoque", min_value=0)
+            if st.form_submit_button("Salvar"):
+                st.success("Produto cadastrado com sucesso!")
 
-    if aba == "Cadastrar Produto":
-        st.header("📦 Cadastro de Produto")
-        nome = st.text_input("Nome")
-        grupo = st.text_input("Grupo")
-        marca = st.text_input("Marca")
-        preco = st.number_input("Preço", min_value=0.0)
-        estoque = st.number_input("Estoque", min_value=0)
-        if st.button("Salvar"):
-            cursor.execute("INSERT INTO PRODUTO (nome, grupo, marca, preco, estoque) VALUES (?, ?, ?, ?, ?)", (nome, grupo, marca, preco, estoque))
-            conn.commit()
-            st.success("Produto salvo!")
+    elif menu == "Cadastro Cliente":
+        st.title("👤 Cadastro de Cliente")
+        with st.form("cad_cliente"):
+            nome = st.text_input("Nome")
+            email = st.text_input("Email")
+            telefone = st.text_input("Telefone")
+            if st.form_submit_button("Salvar"):
+                st.success("Cliente cadastrado com sucesso!")
 
-    elif aba == "Nova Venda":
-        st.header("🧾 Nova Venda")
-        clientes = cursor.execute("SELECT id, nome FROM CLIENTE").fetchall()
-        produtos = cursor.execute("SELECT id, nome, preco, estoque FROM PRODUTO").fetchall()
-        cliente = st.selectbox("Cliente", [f"{c[0]} - {c[1]}" for c in clientes])
-        forma_pgto = st.selectbox("Forma de Pagamento", ["Dinheiro", "Cartão", "PIX"])
+    elif menu == "Registrar Venda":
+        st.title("🧾 Nova Venda")
+        with st.form("venda"):
+            cliente = st.selectbox("Cliente", cliente_df["NOME"].dropna())
+            pgto = st.selectbox("Forma de Pagamento", forma_pgto_df["DESCRICAO"].dropna())
+            st.markdown("---")
+            itens = []
+            for i in range(3):
+                prod = st.selectbox(f"Produto {i+1}", produto_df["DESCRICAO"], key=f"prod_{i}")
+                qtd = st.number_input(f"Qtd {i+1}", min_value=0, key=f"qtd_{i}")
+                if qtd > 0:
+                    preco = float(produto_df.loc[produto_df["DESCRICAO"] == prod, "PRECO"].values[0])
+                    itens.append({"produto": prod, "qtd": qtd, "preco": preco, "total": qtd * preco})
+            if st.form_submit_button("Finalizar Venda") and itens:
+                total = sum(i["total"] for i in itens)
+                st.success(f"Venda registrada com total de R$ {total:.2f}")
 
-        itens = []
-        for i in range(3):
-            p = st.selectbox(f"Produto {i+1}", [f"{x[0]} - {x[1]}" for x in produtos], key=f"prod{i}")
-            qtd = st.number_input(f"Qtd {i+1}", min_value=0, key=f"qtd{i}")
-            if qtd > 0:
-                prod = next(x for x in produtos if f"{x[0]} - {x[1]}" == p)
-                itens.append((prod[0], qtd, prod[2]))
+    elif menu == "Relatórios":
+        st.title("📊 Relatório de Vendas")
+        col1, col2 = st.columns(2)
+        ini = col1.date_input("Início", datetime.today())
+        fim = col2.date_input("Fim", datetime.today())
+        filtro = (venda_df['DATA'].dt.date >= ini) & (venda_df['DATA'].dt.date <= fim)
+        rel = venda_df[filtro]
+        if not rel.empty:
+            st.dataframe(rel)
+            total = rel["TOTAL"].sum()
+            st.metric("Total do Período", f"R$ {total:,.2f}")
+        else:
+            st.warning("Nenhuma venda encontrada no período.")
 
-        if st.button("Finalizar Venda") and itens:
-            cliente_id = int(cliente.split(" - ")[0])
-            usuario_id = 1
-            data_venda = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            total = sum([q * v for _, q, v in itens])
-            cursor.execute("INSERT INTO VENDA (cliente_id, usuario_id, data, forma_pgto, total) VALUES (?, ?, ?, ?, ?)",
-                           (cliente_id, usuario_id, data_venda, forma_pgto, total))
-            venda_id = cursor.lastrowid
-            for pid, qtd, preco in itens:
-                cursor.execute("INSERT INTO ITENS_SAIDA (venda_id, produto_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)", (venda_id, pid, qtd, preco))
-                cursor.execute("UPDATE PRODUTO SET estoque = estoque - ? WHERE id = ?", (qtd, pid))
-            conn.commit()
-            st.success("Venda concluída!")
-
-    elif aba == "Relatório":
-        st.header("📊 Relatórios de Venda")
-        di = st.date_input("Data Inicial", datetime.now())
-        df = st.date_input("Data Final", datetime.now())
-        if st.button("Gerar"):
-            query = f"SELECT V.id, C.nome AS cliente, U.nome AS usuario, V.data, V.forma_pgto, V.total FROM VENDA V LEFT JOIN CLIENTE C ON V.cliente_id = C.id LEFT JOIN USUARIO U ON V.usuario_id = U.id WHERE date(V.data) BETWEEN '{di}' AND '{df}' ORDER BY V.data DESC"
-            df = pd.read_sql_query(query, conn)
-            if not df.empty:
-                st.dataframe(df)
-                total = df['total'].sum()
-                st.success(f"Total do período: R$ {total:.2f}")
-                st.download_button("📥 Baixar CSV", df.to_csv(index=False).encode(), "relatorio.csv")
-            else:
-                st.warning("Nenhuma venda no período.")
+    elif menu == "Painel":
+        st.title("📈 Painel Financeiro")
+        pgto_group = venda_df.groupby("ID_FORMA_PGTO")["TOTAL"].sum().reset_index()
+        fig_pgto = px.bar(pgto_group, x="ID_FORMA_PGTO", y="TOTAL", title="Total por Forma de Pagamento")
+        st.plotly_chart(fig_pgto)
+        diario = venda_df.groupby(venda_df["DATA"].dt.date)["TOTAL"].sum().reset_index()
+        fig_dia = px.line(diario, x="DATA", y="TOTAL", title="Evolução Diária")
+        st.plotly_chart(fig_dia)
+        st.metric("Total Geral de Vendas", f"R$ {venda_df['TOTAL'].sum():,.2f}")
 
 elif auth_status is False:
-    st.error("Credenciais inválidas")
+    st.error("Usuário ou senha incorretos.")
 elif auth_status is None:
-    st.info("Digite suas credenciais")
+    st.warning("Digite suas credenciais para entrar.")
