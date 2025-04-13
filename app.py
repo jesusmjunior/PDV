@@ -1,7 +1,21 @@
+# -*- coding: utf-8 -*-
+# ORION PDV STREAMLIT - APP UNIFICADO
+# Módulos: Cadastro Produto, Cliente, Venda, Relatórios, Painel
+
+# ===================== DEPENDÊNCIAS NECESSÁRIAS =====================
+# Certifique-se de ter os seguintes pacotes instalados:
+# pip install streamlit pandas plotly streamlit-authenticator
+
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
+
+# Tentar importar plotly.express com fallback amigável
+try:
+    import plotly.express as px
+except ModuleNotFoundError:
+    st.warning("Biblioteca 'plotly' não encontrada. Execute: pip install plotly")
+
 import streamlit_authenticator as stauth
 
 # URLs CSV Google Sheets
@@ -102,13 +116,18 @@ if auth_status:
 
     elif menu == "Painel":
         st.title("📈 Painel Financeiro")
-        pgto_group = venda_df.groupby("ID_FORMA_PGTO")["TOTAL"].sum().reset_index()
-        fig_pgto = px.bar(pgto_group, x="ID_FORMA_PGTO", y="TOTAL", title="Total por Forma de Pagamento")
-        st.plotly_chart(fig_pgto)
-        diario = venda_df.groupby(venda_df["DATA"].dt.date)["TOTAL"].sum().reset_index()
-        fig_dia = px.line(diario, x="DATA", y="TOTAL", title="Evolução Diária")
-        st.plotly_chart(fig_dia)
-        st.metric("Total Geral de Vendas", f"R$ {venda_df['TOTAL'].sum():,.2f}")
+        try:
+            pgto_group = venda_df.groupby("ID_FORMA_PGTO")["TOTAL"].sum().reset_index()
+            fig_pgto = px.bar(pgto_group, x="ID_FORMA_PGTO", y="TOTAL", title="Total por Forma de Pagamento")
+            st.plotly_chart(fig_pgto)
+
+            diario = venda_df.groupby(venda_df["DATA"].dt.date)["TOTAL"].sum().reset_index()
+            fig_dia = px.line(diario, x="DATA", y="TOTAL", title="Evolução Diária")
+            st.plotly_chart(fig_dia)
+
+            st.metric("Total Geral de Vendas", f"R$ {venda_df['TOTAL'].sum():,.2f}")
+        except Exception as e:
+            st.error("Erro ao gerar gráficos. Verifique se 'plotly' está instalado.")
 
 elif auth_status is False:
     st.error("Usuário ou senha incorretos.")
